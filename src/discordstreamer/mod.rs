@@ -1,6 +1,7 @@
 mod imp;
 
 use gst::glib;
+use gst::prelude::*;
 use gst::glib::StaticType;
 
 glib::wrapper! {
@@ -9,11 +10,12 @@ glib::wrapper! {
 
 impl Default for DiscordStreamer {
     fn default() -> Self {
-        glib::Object::new::<Self>()
+        glib::Object::new()
     }
 }
 
 pub fn register(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    DiscordStreamer::static_type().mark_as_plugin_api(gst::PluginAPIFlags::empty());
     gst::Element::register(
         Some(plugin),
         "discordstreamer",

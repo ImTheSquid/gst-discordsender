@@ -1,18 +1,8 @@
-use std::ptr::NonNull;
 use std::sync::Mutex;
 use gst::glib;
-use gst::glib::subclass::TypeData;
-use gst::glib::Type;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
-use tokio::runtime;
-
-pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
-    runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-});
+use tokio::runtime::Handle;
 
 pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -24,11 +14,25 @@ pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 #[derive(Default)]
 struct State {
+    handle: Option<Handle>,
 }
 
 #[derive(Default)]
 pub struct DiscordStreamer {
     state: Mutex<State>
+}
+
+impl DiscordStreamer {
+    pub fn set_tokio_runtime(
+        &self,
+        handle: Handle
+    ) {
+        let _ = self.state.lock().unwrap().handle.insert(handle);
+    }
+
+    fn runtime_handle(&self) -> Handle {
+        self.state.lock().unwrap().handle.as_ref().unwrap_or(crate::RUNTIME.handle()).clone()
+    }
 }
 
 #[glib::object_subclass]

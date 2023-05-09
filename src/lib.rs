@@ -4,6 +4,13 @@ use gst::glib;
 use tokio::runtime;
 use once_cell::sync::Lazy;
 
+pub static RUNTIME: Lazy<runtime::Runtime> = Lazy::new(|| {
+    runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+});
+
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     discordstreamer::register(plugin)?;
     Ok(())
