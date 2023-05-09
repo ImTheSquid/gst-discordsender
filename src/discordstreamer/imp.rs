@@ -82,18 +82,25 @@ impl ElementImpl for DiscordStreamer {
 
     fn pad_templates() -> &'static [PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<PadTemplate>> = Lazy::new(|| {
+            let caps = gst::Caps::builder_full()
+                .structure(gst::Structure::builder("video/x-h264").field("stream-format", "byte-stream").field("profile", "baseline").build())
+                .structure(gst::Structure::builder("video/x-vp8").build())
+                .structure(gst::Structure::builder("video/x-vp9").build())
+                .structure(gst::Structure::builder("video/x-av1").build())
+                .build();
+
             let video_sink_pad_template = PadTemplate::new(
                 "video_sink",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Always,
-                &Caps::new_empty_simple("video/x-raw"),
+                &caps,
             ).unwrap();
 
             let audio_sink_pad_template = PadTemplate::new(
                 "audio_sink",
                 gst::PadDirection::Sink,
                 gst::PadPresence::Request,
-                &Caps::new_empty_simple("audio/x-raw"),
+                &Caps::new_empty_simple("audio/x-opus"),
             ).unwrap();
 
             vec![video_sink_pad_template, audio_sink_pad_template]
