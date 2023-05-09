@@ -1,4 +1,5 @@
 pub mod discordstreamer;
+mod crypto;
 
 use gst::glib;
 use tokio::runtime;
