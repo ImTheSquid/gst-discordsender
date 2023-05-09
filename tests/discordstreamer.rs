@@ -29,9 +29,28 @@ fn pipeline_creation_test() {
 
     let discord_streamer = DiscordStreamer::default();
 
-    pipeline
-        .add(&discord_streamer)
-        .expect("Failed to add discord_streamer to the pipeline");
+    let video_test_src = gst::ElementFactory::make("videotestsrc").build().unwrap();
+
+    let audio_test_src = gst::ElementFactory::make("audiotestsrc").build().unwrap();
+
+    let video_convert = gst::ElementFactory::make("videoconvert").build().unwrap();
+
+    let audio_convert = gst::ElementFactory::make("audioconvert").build().unwrap();
+
+    pipeline.add(&discord_streamer).expect("Failed to add discord_streamer to the pipeline");
+
+    pipeline.add(&video_test_src).expect("Failed to add video_test_src to the pipeline");
+    pipeline.add(&audio_test_src).expect("Failed to add audio_test_src to the pipeline");
+
+    pipeline.add(&video_convert).expect("Failed to add videoconvert to the pipeline");
+    pipeline.add(&audio_convert).expect("Failed to add audioconvert to the pipeline");
+
+
+    video_test_src.link(&video_convert).expect("Failed to link video_test_src and videoconvert");
+    video_convert.link(&discord_streamer).expect("Failed to link videoconvert and discord_streamer");
+
+    audio_test_src.link(&audio_convert).expect("Failed to link audio_test_src and audioconvert");
+    audio_convert.link(&discord_streamer).expect("Failed to link audioconvert and discord_streamer");
 
     pipeline.set_state(gst::State::Playing).expect("Failed to set pipeline state");
 
