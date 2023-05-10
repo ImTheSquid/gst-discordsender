@@ -5,9 +5,8 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use tokio::runtime::Handle;
 use xsalsa20poly1305::aead::NewAead;
-use xsalsa20poly1305::{KEY_SIZE, TAG_SIZE, XSalsa20Poly1305 as Cipher};
+use xsalsa20poly1305::{KEY_SIZE, XSalsa20Poly1305 as Cipher};
 
 use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 use crate::crypto::CryptoState;
@@ -21,7 +20,6 @@ pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 });
 
 struct State {
-    handle: Option<Handle>,
     crypto_state: CryptoState,
     cipher: Cipher,
 }
@@ -54,17 +52,6 @@ impl DiscordStreamer {
             self.audio_sequence.store(0, Ordering::Relaxed);
         }
         sequence
-    }
-
-    pub fn set_tokio_runtime(
-        &self,
-        handle: Handle,
-    ) {
-        let _ = self.state.lock().handle.insert(handle);
-    }
-
-    fn runtime_handle(&self) -> Handle {
-        self.state.lock().handle.as_ref().unwrap_or(crate::RUNTIME.handle()).clone()
     }
 
     //https://github.com/serenity-rs/songbird/blob/22fe3f3d4e43db67f1cdb7c9574867539517fb51/src/driver/tasks/mixer.rs#L484
@@ -144,7 +131,6 @@ impl ObjectSubclass for DiscordStreamer {
 
         Self {
             state: Mutex::new(State {
-                handle: None,
                 crypto_state: CryptoState::Normal,
                 cipher: Cipher::new_from_slice(&[0u8; KEY_SIZE]).unwrap(),
             }),
