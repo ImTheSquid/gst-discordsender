@@ -106,7 +106,8 @@ impl DiscordStreamer {
 
         let mut state = self.state.lock();
 
-        let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, TAG_SIZE + payload_size);
+        //let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, TAG_SIZE + payload_size);
+        let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, payload_size);
 
         state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
 
