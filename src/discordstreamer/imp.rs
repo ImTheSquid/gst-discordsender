@@ -1,13 +1,13 @@
 use std::sync::atomic::{AtomicU16, Ordering};
 use discortp::{Packet};
-use gst::{Caps, error, FlowError, glib, Pad, PadTemplate};
+use gst::{Caps, error, FlowError, Fraction, glib, Pad, PadTemplate};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use tokio::runtime::Handle;
 use xsalsa20poly1305::aead::NewAead;
-use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
+use xsalsa20poly1305::{KEY_SIZE, XSalsa20Poly1305 as Cipher};
 
 use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 use crate::crypto::CryptoState;
@@ -82,7 +82,10 @@ impl DiscordStreamer {
 
         rtp.set_version(RTP_VERSION);
 
-        let encoding_name = pad.current_caps().expect("No caps on pad").structure(0).expect("No structure on caps").name().as_str();
+        let caps = pad.current_caps().expect("No caps on pad");
+        let caps = caps.structure(0).expect("No structure on caps");
+
+        let encoding_name = caps.name().as_str();
 
         let rtp_type = match encoding_name {
             "video/x-av1" => RTP_AV1_PROFILE_TYPE,
@@ -94,17 +97,18 @@ impl DiscordStreamer {
         rtp.set_payload_type(rtp_type);
 
         rtp.set_sequence(self.get_video_sequence().into());
-        //TODO: Not sure about this one https://github.com/aiko-chan-ai/Discord-video-selfbot/blob/f14ea0a259e4bbf9ae995ec16f45ad767b3ebf39/src/Packet/AudioPacketizer.js#LL17C5-L17C5
-        rtp.set_timestamp(0.into());
+
+        let fps = caps.get::<Fraction>("framerate").expect("No framerate on caps");
+        let fps = fps.numer() as u32 / fps.denom() as u32;
+        rtp.set_timestamp((90_000/fps).into());
 
         let payload_size = rtp.payload().len();
 
-        let state = self.state.lock();
+        let mut state = self.state.lock();
 
         let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
 
         state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
-
 
         Ok(gst::FlowSuccess::Ok)
     }
@@ -114,7 +118,7 @@ impl DiscordStreamer {
         pad: &Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, FlowError> {
-        error!("Audio not supported yet");
+        error!(CAT, "Audio not supported yet");
         Err(FlowError::NotSupported)
     }
 }
@@ -141,7 +145,7 @@ impl ObjectSubclass for DiscordStreamer {
             state: Mutex::new(State {
                 handle: None,
                 crypto_state: CryptoState::Normal,
-                cipher: Cipher::new_from_slice(&[0u8; 4]).unwrap(),
+                cipher: Cipher::new_from_slice(&[0u8; KEY_SIZE]).unwrap(),
             }),
             pads: Mutex::new(Pads {
                 video_sink,
