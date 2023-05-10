@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicU16, Ordering};
 use discortp::{Packet};
 use gst::{Caps, error, FlowError, glib, Pad, PadTemplate};
 use gst::prelude::*;
@@ -33,9 +34,28 @@ struct Pads {
 pub struct DiscordStreamer {
     state: Mutex<State>,
     pads: Mutex<Pads>,
+
+    video_sequence: AtomicU16,
+    audio_sequence: AtomicU16,
 }
 
 impl DiscordStreamer {
+    fn get_video_sequence(&self) -> u16 {
+        let sequence = self.video_sequence.fetch_add(1, Ordering::Relaxed);
+        if sequence == u16::MAX {
+            self.video_sequence.store(0, Ordering::Relaxed);
+        }
+        sequence
+    }
+
+    fn get_audio_sequence(&self) -> u16 {
+        let sequence = self.audio_sequence.fetch_add(1, Ordering::Relaxed);
+        if sequence == u16::MAX {
+            self.audio_sequence.store(0, Ordering::Relaxed);
+        }
+        sequence
+    }
+
     pub fn set_tokio_runtime(
         &self,
         handle: Handle,
@@ -73,8 +93,7 @@ impl DiscordStreamer {
         };
         rtp.set_payload_type(rtp_type);
 
-        //TODO: This should be incremented by 1 every packet (separate for audio and video)
-        rtp.set_sequence(0.into());
+        rtp.set_sequence(self.get_video_sequence().into());
         //TODO: Not sure about this one https://github.com/aiko-chan-ai/Discord-video-selfbot/blob/f14ea0a259e4bbf9ae995ec16f45ad767b3ebf39/src/Packet/AudioPacketizer.js#LL17C5-L17C5
         rtp.set_timestamp(0.into());
 
@@ -128,6 +147,8 @@ impl ObjectSubclass for DiscordStreamer {
                 video_sink,
                 audio_sink: None,
             }),
+            video_sequence: AtomicU16::new(0),
+            audio_sequence: AtomicU16::new(0),
         }
     }
 }
