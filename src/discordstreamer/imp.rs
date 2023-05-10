@@ -1,9 +1,15 @@
+use discortp::MutablePacket;
 use gst::{Caps, glib, info, Pad, PadTemplate};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
+use discortp::rtp::RtpType;
 use tokio::runtime::Handle;
+use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
+use xsalsa20poly1305::aead::NewAead;
+
+use crate::crypto::CryptoState;
 
 pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
     gst::DebugCategory::new(
@@ -17,6 +23,7 @@ struct State {
     handle: Option<Handle>,
     video_sink: Pad,
     audio_sink: Option<Pad>,
+    crypto_state: CryptoState
 }
 
 pub struct DiscordStreamer {
@@ -34,6 +41,41 @@ impl DiscordStreamer {
     fn runtime_handle(&self) -> Handle {
         self.state.lock().handle.as_ref().unwrap_or(crate::RUNTIME.handle()).clone()
     }
+
+    //https://github.com/serenity-rs/songbird/blob/22fe3f3d4e43db67f1cdb7c9574867539517fb51/src/driver/tasks/mixer.rs#L484
+    fn video_sink_chain(
+        &self,
+        pad: &gst::Pad,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, gst::FlowError> {
+        //TODO: Figure out the right size for the packet
+        let mut packet = [0u8; 1460];
+
+        let _ = buffer.copy_to_slice(0, &mut packet);
+        let mut rtp = discortp::rtp::MutableRtpPacket::new(&mut packet[..]).expect(
+            "FATAL: Too few bytes in self.packet for RTP header."
+        );
+
+        //TODO: Move this to a constant rust file
+        rtp.set_version(2);
+        //TODO: Set this based on the codec
+        rtp.set_payload_type(RtpType::Dynamic(111));
+        //TODO: This should be incremented by 1 every packet (separate for audio and video)
+        rtp.set_sequence(0.into());
+        //TODO: Not sure about this one https://github.com/aiko-chan-ai/Discord-video-selfbot/blob/f14ea0a259e4bbf9ae995ec16f45ad767b3ebf39/src/Packet/AudioPacketizer.js#LL17C5-L17C5
+        rtp.set_timestamp(0.into());
+
+        let payload = rtp.payload_mut();
+        
+        let final_payload_size = self.state.lock().crypto_state.write_packet_nonce(&mut rtp, 16 + payload.len());
+
+        //TODO: Use real key and store Cipher in state
+        self.state.lock().crypto_state.kind().encrypt_in_place(&mut rtp, &Cipher::new_from_slice(&vec![0u8; 4]).unwrap(), final_payload_size).expect("Failed to encrypt packet");
+
+
+        Ok(gst::FlowSuccess::Ok)
+    }
+
 }
 
 #[glib::object_subclass]
@@ -44,13 +86,22 @@ impl ObjectSubclass for DiscordStreamer {
 
     fn with_class(klass: &Self::Class) -> Self {
         let templ = klass.pad_template("video_sink").unwrap();
-        let video_sink = Pad::builder_with_template(&templ, Some("video_sink")).build();
+        let video_sink = Pad::builder_with_template(&templ, Some("video_sink"))
+            .chain_function(|pad, parent, buffer| {
+                DiscordStreamer::catch_panic_pad_function(
+                    parent,
+                    || Err(gst::FlowError::Error),
+                    |s| s.video_sink_chain(pad, buffer),
+                )
+            })
+            .build();
 
         Self {
             state: Mutex::new(State{
                 handle: None,
                 video_sink,
                 audio_sink: None,
+                crypto_state: CryptoState::Normal
             }),
         }
     }
