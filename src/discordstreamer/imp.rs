@@ -8,6 +8,7 @@ use discortp::rtp::RtpType;
 use tokio::runtime::Handle;
 use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
 use xsalsa20poly1305::aead::NewAead;
+use crate::constants::RTP_VERSION;
 
 use crate::crypto::CryptoState;
 
@@ -56,8 +57,7 @@ impl DiscordStreamer {
             "FATAL: Too few bytes in self.packet for RTP header."
         );
 
-        //TODO: Move this to a constant rust file
-        rtp.set_version(2);
+        rtp.set_version(RTP_VERSION);
         //TODO: Set this based on the codec
         rtp.set_payload_type(RtpType::Dynamic(111));
         //TODO: This should be incremented by 1 every packet (separate for audio and video)
