@@ -1,4 +1,4 @@
-use discortp::MutablePacket;
+use discortp::{MutablePacket, Packet};
 use gst::{Caps, glib, info, Pad, PadTemplate};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
@@ -65,12 +65,12 @@ impl DiscordStreamer {
         //TODO: Not sure about this one https://github.com/aiko-chan-ai/Discord-video-selfbot/blob/f14ea0a259e4bbf9ae995ec16f45ad767b3ebf39/src/Packet/AudioPacketizer.js#LL17C5-L17C5
         rtp.set_timestamp(0.into());
 
-        let payload = rtp.payload_mut();
+        let payload_size = rtp.payload().len();
         
-        let final_payload_size = self.state.lock().crypto_state.write_packet_nonce(&mut rtp, 16 + payload.len());
+        let final_payload_size = self.state.lock().crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
 
         //TODO: Use real key and store Cipher in state
-        self.state.lock().crypto_state.kind().encrypt_in_place(&mut rtp, &Cipher::new_from_slice(&vec![0u8; 4]).unwrap(), final_payload_size).expect("Failed to encrypt packet");
+        self.state.lock().crypto_state.kind().encrypt_in_place(&mut rtp, &Cipher::new_from_slice(&[0u8; 4]).unwrap(), final_payload_size).expect("Failed to encrypt packet");
 
 
         Ok(gst::FlowSuccess::Ok)
