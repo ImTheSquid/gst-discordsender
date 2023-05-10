@@ -1,5 +1,5 @@
 use discortp::{MutablePacket, Packet};
-use gst::{Caps, glib, info, Pad, PadTemplate};
+use gst::{Caps, error, FlowError, glib, info, Pad, PadTemplate};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
@@ -8,7 +8,7 @@ use discortp::rtp::RtpType;
 use tokio::runtime::Handle;
 use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
 use xsalsa20poly1305::aead::NewAead;
-use crate::constants::RTP_VERSION;
+use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 
 use crate::crypto::CryptoState;
 
@@ -46,11 +46,10 @@ impl DiscordStreamer {
     //https://github.com/serenity-rs/songbird/blob/22fe3f3d4e43db67f1cdb7c9574867539517fb51/src/driver/tasks/mixer.rs#L484
     fn video_sink_chain(
         &self,
-        pad: &gst::Pad,
+        pad: &Pad,
         buffer: gst::Buffer,
-    ) -> Result<gst::FlowSuccess, gst::FlowError> {
-        //TODO: Figure out the right size for the packet
-        let mut packet = [0u8; 1460];
+    ) -> Result<gst::FlowSuccess, FlowError> {
+        let mut packet = [0u8; RTP_PACKET_MAX_SIZE];
 
         let _ = buffer.copy_to_slice(0, &mut packet);
         let mut rtp = discortp::rtp::MutableRtpPacket::new(&mut packet[..]).expect(
@@ -58,8 +57,18 @@ impl DiscordStreamer {
         );
 
         rtp.set_version(RTP_VERSION);
-        //TODO: Set this based on the codec
-        rtp.set_payload_type(RtpType::Dynamic(111));
+
+        let encoding_name = pad.current_caps().expect("No caps on pad").structure(0).expect("No structure on caps").name().as_str();
+
+        let rtp_type = match encoding_name {
+            "video/x-av1" => RTP_AV1_PROFILE_TYPE,
+            "video/x-h264" => RTP_H264_PROFILE_TYPE,
+            "video/x-vp8" => RTP_VP8_PROFILE_TYPE,
+            "video/x-vp9" => RTP_VP9_PROFILE_TYPE,
+            _ => return Err(FlowError::NotSupported)
+        };
+        rtp.set_payload_type(rtp_type);
+
         //TODO: This should be incremented by 1 every packet (separate for audio and video)
         rtp.set_sequence(0.into());
         //TODO: Not sure about this one https://github.com/aiko-chan-ai/Discord-video-selfbot/blob/f14ea0a259e4bbf9ae995ec16f45ad767b3ebf39/src/Packet/AudioPacketizer.js#LL17C5-L17C5
@@ -74,6 +83,15 @@ impl DiscordStreamer {
 
 
         Ok(gst::FlowSuccess::Ok)
+    }
+
+    fn audio_sink_chain(
+        &self,
+        pad: &Pad,
+        buffer: gst::Buffer,
+    ) -> Result<gst::FlowSuccess, FlowError> {
+        error!("Audio not supported yet");
+        Err(FlowError::NotSupported)
     }
 
 }
@@ -163,7 +181,15 @@ impl ElementImpl for DiscordStreamer {
     //TODO: Implement audio pad sink request
     fn request_new_pad(&self, templ: &PadTemplate, name: Option<&str>, caps: Option<&Caps>) -> Option<Pad> {
         if templ.name_template() == "audio_sink" {
-            let audio_sink = Pad::builder_with_template(templ, name).build();
+            let audio_sink = Pad::builder_with_template(templ, name)
+                .chain_function(|pad, parent, buffer| {
+                    DiscordStreamer::catch_panic_pad_function(
+                        parent,
+                        || Err(gst::FlowError::Error),
+                        |s| s.audio_sink_chain(pad, buffer),
+                    )
+                })
+                .build();
             self.obj().add_pad(&audio_sink).unwrap();
             self.state.lock().audio_sink = Some(audio_sink.clone());
             return Some(audio_sink);
