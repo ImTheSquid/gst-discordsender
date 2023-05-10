@@ -1,15 +1,14 @@
-use discortp::{MutablePacket, Packet};
-use gst::{Caps, error, FlowError, glib, info, Pad, PadTemplate};
+use discortp::{Packet};
+use gst::{Caps, error, FlowError, glib, Pad, PadTemplate};
 use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use discortp::rtp::RtpType;
 use tokio::runtime::Handle;
-use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
 use xsalsa20poly1305::aead::NewAead;
-use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
+use xsalsa20poly1305::XSalsa20Poly1305 as Cipher;
 
+use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 use crate::crypto::CryptoState;
 
 pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -22,20 +21,24 @@ pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 
 struct State {
     handle: Option<Handle>,
-    video_sink: Pad,
-    audio_sink: Option<Pad>,
     crypto_state: CryptoState,
     cipher: Cipher,
 }
 
+struct Pads {
+    video_sink: Pad,
+    audio_sink: Option<Pad>,
+}
+
 pub struct DiscordStreamer {
     state: Mutex<State>,
+    pads: Mutex<Pads>,
 }
 
 impl DiscordStreamer {
     pub fn set_tokio_runtime(
         &self,
-        handle: Handle
+        handle: Handle,
     ) {
         let _ = self.state.lock().handle.insert(handle);
     }
@@ -78,7 +81,7 @@ impl DiscordStreamer {
         let payload_size = rtp.payload().len();
 
         let state = self.state.lock();
-        
+
         let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
 
         state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
@@ -95,7 +98,6 @@ impl DiscordStreamer {
         error!("Audio not supported yet");
         Err(FlowError::NotSupported)
     }
-
 }
 
 #[glib::object_subclass]
@@ -110,29 +112,31 @@ impl ObjectSubclass for DiscordStreamer {
             .chain_function(|pad, parent, buffer| {
                 DiscordStreamer::catch_panic_pad_function(
                     parent,
-                    || Err(gst::FlowError::Error),
+                    || Err(FlowError::Error),
                     |s| s.video_sink_chain(pad, buffer),
                 )
             })
             .build();
 
         Self {
-            state: Mutex::new(State{
+            state: Mutex::new(State {
                 handle: None,
-                video_sink,
-                audio_sink: None,
                 crypto_state: CryptoState::Normal,
                 cipher: Cipher::new_from_slice(&[0u8; 4]).unwrap(),
             }),
+            pads: Mutex::new(Pads {
+                video_sink,
+                audio_sink: None,
+            }),
         }
     }
-
 }
+
 impl ObjectImpl for DiscordStreamer {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.obj().add_pad(&self.state.lock().video_sink).unwrap();
+        self.obj().add_pad(&self.pads.lock().video_sink).unwrap();
     }
 }
 
@@ -154,7 +158,7 @@ impl ElementImpl for DiscordStreamer {
 
     fn pad_templates() -> &'static [PadTemplate] {
         static PAD_TEMPLATES: Lazy<Vec<PadTemplate>> = Lazy::new(|| {
-            let caps = gst::Caps::builder_full()
+            let caps = Caps::builder_full()
                 .structure(gst::Structure::builder("video/x-h264").field("stream-format", "byte-stream").field("profile", "baseline").build())
                 .structure(gst::Structure::builder("video/x-vp8").build())
                 .structure(gst::Structure::builder("video/x-vp9").build())
@@ -182,19 +186,19 @@ impl ElementImpl for DiscordStreamer {
     }
 
     //TODO: Implement audio pad sink request
-    fn request_new_pad(&self, templ: &PadTemplate, name: Option<&str>, caps: Option<&Caps>) -> Option<Pad> {
+    fn request_new_pad(&self, templ: &PadTemplate, name: Option<&str>, _caps: Option<&Caps>) -> Option<Pad> {
         if templ.name_template() == "audio_sink" {
             let audio_sink = Pad::builder_with_template(templ, name)
                 .chain_function(|pad, parent, buffer| {
                     DiscordStreamer::catch_panic_pad_function(
                         parent,
-                        || Err(gst::FlowError::Error),
+                        || Err(FlowError::Error),
                         |s| s.audio_sink_chain(pad, buffer),
                     )
                 })
                 .build();
             self.obj().add_pad(&audio_sink).unwrap();
-            self.state.lock().audio_sink = Some(audio_sink.clone());
+            self.pads.lock().audio_sink = Some(audio_sink.clone());
             return Some(audio_sink);
         }
 
