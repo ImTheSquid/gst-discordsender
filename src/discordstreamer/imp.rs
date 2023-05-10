@@ -24,7 +24,8 @@ struct State {
     handle: Option<Handle>,
     video_sink: Pad,
     audio_sink: Option<Pad>,
-    crypto_state: CryptoState
+    crypto_state: CryptoState,
+    cipher: Cipher,
 }
 
 pub struct DiscordStreamer {
@@ -75,11 +76,12 @@ impl DiscordStreamer {
         rtp.set_timestamp(0.into());
 
         let payload_size = rtp.payload().len();
-        
-        let final_payload_size = self.state.lock().crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
 
-        //TODO: Use real key and store Cipher in state
-        self.state.lock().crypto_state.kind().encrypt_in_place(&mut rtp, &Cipher::new_from_slice(&[0u8; 4]).unwrap(), final_payload_size).expect("Failed to encrypt packet");
+        let state = self.state.lock();
+        
+        let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
+
+        state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
 
 
         Ok(gst::FlowSuccess::Ok)
@@ -119,7 +121,8 @@ impl ObjectSubclass for DiscordStreamer {
                 handle: None,
                 video_sink,
                 audio_sink: None,
-                crypto_state: CryptoState::Normal
+                crypto_state: CryptoState::Normal,
+                cipher: Cipher::new_from_slice(&[0u8; 4]).unwrap(),
             }),
         }
     }
