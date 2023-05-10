@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use tokio::runtime::Handle;
 use xsalsa20poly1305::aead::NewAead;
-use xsalsa20poly1305::{KEY_SIZE, XSalsa20Poly1305 as Cipher};
+use xsalsa20poly1305::{KEY_SIZE, TAG_SIZE, XSalsa20Poly1305 as Cipher};
 
 use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 use crate::crypto::CryptoState;
@@ -106,7 +106,7 @@ impl DiscordStreamer {
 
         let mut state = self.state.lock();
 
-        let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, 16 + payload_size);
+        let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, TAG_SIZE + payload_size);
 
         state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
 
