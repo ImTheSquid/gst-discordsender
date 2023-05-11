@@ -1,3 +1,4 @@
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU16, Ordering};
 use discortp::{Packet};
 use gst::{Caps, error, FlowError, Fraction, glib, Pad, PadTemplate};
@@ -22,6 +23,7 @@ pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
 struct State {
     crypto_state: CryptoState,
     cipher: Cipher,
+    udp_socket: UdpSocket,
 }
 
 struct Pads {
@@ -98,6 +100,8 @@ impl DiscordStreamer {
 
         state.crypto_state.kind().encrypt_in_place(&mut rtp, &state.cipher, final_payload_size).expect("Failed to encrypt packet");
 
+        let _ = state.udp_socket.send(&rtp.packet()[..final_payload_size]);
+
         Ok(gst::FlowSuccess::Ok)
     }
 
@@ -133,6 +137,7 @@ impl ObjectSubclass for DiscordStreamer {
             state: Mutex::new(State {
                 crypto_state: CryptoState::Normal,
                 cipher: Cipher::new_from_slice(&[0u8; KEY_SIZE]).unwrap(),
+                udp_socket: UdpSocket::bind("0.0.0.0:0000").unwrap(),
             }),
             pads: Mutex::new(Pads {
                 video_sink,
