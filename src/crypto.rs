@@ -12,25 +12,29 @@ use xsalsa20poly1305::{
     NONCE_SIZE,
     TAG_SIZE,
 };
+use serde::{Deserialize, Serialize};
 
 /// Variants of the XSalsa20Poly1305 encryption scheme.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub enum CryptoMode {
     /// The RTP header is used as the source of nonce bytes for the packet.
     ///
     /// Equivalent to a nonce of at most 48b (6B) at no extra packet overhead:
     /// the RTP sequence number and timestamp are the varying quantities.
+    #[serde(rename = "xsalsa20_poly1305")]
     Normal,
     /// An additional random 24B suffix is used as the source of nonce bytes for the packet.
     /// This is regenerated randomly for each packet.
     ///
     /// Full nonce width of 24B (192b), at an extra 24B per packet (~1.2 kB/s).
+    #[serde(rename = "xsalsa20_poly1305_suffix")]
     Suffix,
     /// An additional random 4B suffix is used as the source of nonce bytes for the packet.
     /// This nonce value increments by `1` with each packet.
     ///
     /// Nonce width of 4B (32b), at an extra 4B per packet (~0.2 kB/s).
+    #[serde(rename = "xsalsa20_poly1305_lite")]
     Lite,
 }
 
@@ -46,16 +50,6 @@ impl From<CryptoState> for CryptoMode {
 }
 
 impl CryptoMode {
-    /// Returns the name of a mode as it will appear during negotiation.
-    pub fn to_request_str(self) -> &'static str {
-        use CryptoMode::*;
-        match self {
-            Normal => "xsalsa20_poly1305",
-            Suffix => "xsalsa20_poly1305_suffix",
-            Lite => "xsalsa20_poly1305_lite",
-        }
-    }
-
     /// Returns the number of bytes each nonce is stored as within
     /// a packet.
     pub fn nonce_size(self) -> usize {

@@ -22,12 +22,14 @@ gst-base = { package = "gstreamer-base", version = "0.20.5", features = ["v1_22"
 gst-video = { package = "gstreamer-video", version = "0.20.4", features = ["v1_22"] }
 gst-audio = { package = "gstreamer-audio", version = "0.20.4", features = ["v1_22"] }
 once_cell = "1.17.1"
-parking_lot = { version = "0.12.1", features = ["deadlock_detection"] }
+parking_lot = { version = "0.12.1" }
 discortp = { version = "0.5.0", features = ["discord-full", "rtp"] }
 byteorder = "1.4.3"
 rand = "0.8.5"
 #TODO: Update to 0.9 (NOTE: 0.9 breaks crypto.rs changes are needed)
 xsalsa20poly1305 = { version = "0.8", features = ["std"] }
+serde = { version = "1.0.163", features = ["derive"] }
+serde_plain = "1.0.1"
 
 [build-dependencies]
 gst-plugin-version-helper = "0.7.5"
