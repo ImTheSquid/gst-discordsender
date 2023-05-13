@@ -25,6 +25,8 @@ struct State {
     crypto_state: CryptoState,
     cipher: Cipher,
     udp_socket: UdpSocket,
+    video_ssrc: u32,
+    audio_ssrc: u32
 }
 
 impl State {
@@ -70,10 +72,26 @@ impl State {
             ));
         };
 
+        let Some(video_ssrc) = props.video_ssrc else {
+            return Err(gst::error_msg!(
+                gst::ResourceError::NotFound,
+                ["No video SSRC provided"]
+            ));
+        };
+
+        let Some(audio_ssrc) = props.audio_ssrc else {
+            return Err(gst::error_msg!(
+                gst::ResourceError::NotFound,
+                ["No audio SSRC provided"]
+            ));
+        };
+
         Ok(Self {
             crypto_state,
             cipher,
             udp_socket,
+            video_ssrc,
+            audio_ssrc
         })
     }
 }
@@ -87,6 +105,8 @@ struct Props {
     crypto_key: Option<glib::Bytes>,
     crypto_mode: glib::GString,
     address: Option<glib::GString>,
+    video_ssrc: Option<u32>,
+    audio_ssrc: Option<u32>,
 }
 
 impl Default for Props {
@@ -95,6 +115,8 @@ impl Default for Props {
             crypto_key: None,
             crypto_mode: serde_plain::to_string(&CryptoMode::Normal).unwrap().into(),
             address: None,
+            video_ssrc: None,
+            audio_ssrc: None,
         }
     }
 }
@@ -140,6 +162,11 @@ impl DiscordStreamer {
 
         rtp.set_version(RTP_VERSION);
 
+        let mut state = self.state.lock();
+        let state = state.as_mut().expect("State not initialized");
+
+        rtp.set_ssrc(state.video_ssrc);
+
         let caps = pad.current_caps().expect("No caps on pad");
         let caps = caps.structure(0).expect("No structure on caps");
 
@@ -161,9 +188,6 @@ impl DiscordStreamer {
         rtp.set_timestamp((90_000 / fps).into());
 
         let payload_size = rtp.payload().len();
-
-        let mut state = self.state.lock();
-        let state = state.as_mut().expect("State not initialized");
 
         //let final_payload_size = state.crypto_state.write_packet_nonce(&mut rtp, TAG_SIZE + payload_size);
 
@@ -228,6 +252,8 @@ impl ObjectImpl for DiscordStreamer {
                         serde_plain::to_string(&CryptoMode::Suffix).unwrap()).as_str()
                 ).write_only().build(),
                 glib::ParamSpecString::builder("address").nick("Address").blurb("The address to stream to").build(),
+                glib::ParamSpecUInt::builder("video-ssrc").nick("Video ssrc").blurb("The ssrc to use for the rtp video packets").build(),
+                glib::ParamSpecUInt::builder("audio-ssrc").nick("Audio ssrc").blurb("The ssrc to use for the rtp audio packets").build(),
             ]
         });
 
@@ -252,6 +278,16 @@ impl ObjectImpl for DiscordStreamer {
                 props.address = value.get().expect("type checked upstream");
             }
 
+            "video-ssrc" => {
+                let mut props = self.props.lock();
+                props.video_ssrc = Some(value.get().expect("type checked upstream"));
+            }
+
+            "audio-ssrc" => {
+                let mut props = self.props.lock();
+                props.audio_ssrc = Some(value.get().expect("type checked upstream"));
+            }
+
             _ => unimplemented!(),
         }
     }
@@ -261,6 +297,8 @@ impl ObjectImpl for DiscordStreamer {
             "crypto-key" => self.props.lock().crypto_key.to_value(),
             "crypto-mode" => self.props.lock().crypto_mode.to_value(),
             "address" => self.props.lock().address.to_value(),
+            "video-ssrc" => self.props.lock().video_ssrc.map_or((None as Option<glib::GString>).to_value(), |v| v.to_value()),
+            "audio-ssrc" => self.props.lock().audio_ssrc.map_or((None as Option<glib::GString>).to_value(), |v| v.to_value()),
             _ => unimplemented!(),
         }
     }

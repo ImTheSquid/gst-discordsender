@@ -1,3 +1,4 @@
+use std::thread::sleep;
 use gst::prelude::*;
 use gst::{debug_bin_to_dot_data, DebugGraphDetails, glib};
 use discordstreamer::discordstreamer::DiscordStreamer;
@@ -30,6 +31,8 @@ fn pipeline_creation_test() {
     let discord_streamer = DiscordStreamer::default();
     discord_streamer.set_property("crypto-key", glib::Bytes::from_static(&[0; 32]).to_value());
     discord_streamer.set_property("address", &"0.0.0.0:8080".to_value());
+    discord_streamer.set_property("video-ssrc", 0000u32.to_value());
+    discord_streamer.set_property("audio-ssrc", 0000u32.to_value());
 
     pipeline.add(&discord_streamer).expect("Failed to add discord_streamer to the pipeline");
 
