@@ -7,7 +7,7 @@ use gst::prelude::*;
 use gst::subclass::prelude::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use xsalsa20poly1305::aead::NewAead;
+use xsalsa20poly1305::KeyInit;
 use xsalsa20poly1305::{Key, KEY_SIZE, XSalsa20Poly1305 as Cipher};
 
 use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
@@ -202,8 +202,8 @@ impl DiscordStreamer {
 
     fn audio_sink_chain(
         &self,
-        pad: &Pad,
-        buffer: gst::Buffer,
+        _pad: &Pad,
+        _buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, FlowError> {
         error!(CAT, "Audio not supported yet");
         Err(FlowError::NotSupported)

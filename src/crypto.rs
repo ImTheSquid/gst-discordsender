@@ -7,7 +7,6 @@ use std::num::Wrapping;
 use xsalsa20poly1305::{
     aead::{AeadInPlace, Error as CryptoError},
     Nonce,
-    Tag,
     XSalsa20Poly1305 as Cipher,
     NONCE_SIZE,
     TAG_SIZE,
