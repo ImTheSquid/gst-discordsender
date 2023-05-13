@@ -14,7 +14,6 @@ path = "src/lib.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-#TODO: At the end of the project, check if gstreamer 1_22 is needed
 [dependencies]
 gst = { package = "gstreamer", version = "0.20.5", features = ["v1_18"] }
 gst-app = { package = "gstreamer-app", version = "0.20.0", features = ["v1_18"] }
