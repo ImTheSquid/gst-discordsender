@@ -68,6 +68,9 @@ fn pipeline_creation_test() {
 
     pipeline.set_state(gst::State::Playing).expect("Failed to set pipeline state");
 
+    //Sleep for 5 seconds to allow the pipeline to run for a bit before we stop it and consider it a success
+    sleep(std::time::Duration::from_secs(5));
+
     // Debug diagram
     let out = debug_bin_to_dot_data(&pipeline, DebugGraphDetails::ALL);
     init_tests_dir();
