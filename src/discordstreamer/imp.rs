@@ -65,10 +65,17 @@ impl State {
             ));
         };
 
-        let Ok(udp_socket) = UdpSocket::bind(address.as_str()) else {
+        let Ok(udp_socket) = UdpSocket::bind("0.0.0.0:0") else {
             return Err(gst::error_msg!(
                 gst::ResourceError::Failed,
-                ["Failed to bind UDP socket to {}", address]
+                ["Failed to bind UDP socket"]
+            ));
+        };
+
+        if let Err(error) = udp_socket.connect(address.as_str()) {
+            return Err(gst::error_msg!(
+                gst::ResourceError::Failed,
+                ["Failed to connect UDP socket to {}: {}", address, error]
             ));
         };
 
