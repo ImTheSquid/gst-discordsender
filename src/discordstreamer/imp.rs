@@ -120,7 +120,7 @@ impl Default for Props {
     fn default() -> Self {
         Self {
             crypto_key: None,
-            crypto_mode: serde_plain::to_string(&CryptoMode::Normal).unwrap().into(),
+            crypto_mode: serde_plain::to_string(&CryptoMode::Lite).unwrap().into(),
             address: None,
             video_ssrc: None,
             audio_ssrc: None,
