@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 use xsalsa20poly1305::{KeyInit, TAG_SIZE};
 use xsalsa20poly1305::{Key, KEY_SIZE, XSalsa20Poly1305 as Cipher};
 
-use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_PACKET_MAX_SIZE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
+use crate::constants::{RTP_AV1_PROFILE_TYPE, RTP_H264_PROFILE_TYPE, RTP_VERSION, RTP_VP8_PROFILE_TYPE, RTP_VP9_PROFILE_TYPE};
 use crate::crypto::{CryptoMode, CryptoState};
 
 pub static CAT: Lazy<gst::DebugCategory> = Lazy::new(|| {
@@ -160,7 +160,7 @@ impl DiscordStreamer {
         pad: &Pad,
         buffer: gst::Buffer,
     ) -> Result<gst::FlowSuccess, FlowError> {
-        let mut packet = [0u8; RTP_PACKET_MAX_SIZE];
+        let mut packet = vec![0u8; buffer.size()];
 
         let _ = buffer.copy_to_slice(0, &mut packet);
         let mut rtp = discortp::rtp::MutableRtpPacket::new(&mut packet[..]).expect(

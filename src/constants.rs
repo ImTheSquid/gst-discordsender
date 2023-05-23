@@ -1,8 +1,6 @@
 use discortp::rtp::RtpType;
 
 pub const RTP_VERSION: u8 = 2;
-//TODO: Figure out the right value
-pub const RTP_PACKET_MAX_SIZE: usize = 1460;
 pub const RTP_OPUS_PROFILE_TYPE: RtpType = RtpType::Dynamic(120);
 pub const RTP_AV1_PROFILE_TYPE: RtpType = RtpType::Dynamic(101);
 pub const RTP_AV1_RTX_PROFILE_TYPE: RtpType = RtpType::Dynamic(102);
