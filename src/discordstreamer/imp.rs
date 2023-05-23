@@ -92,18 +92,18 @@ impl State {
         // 		blank.writeUInt32BE(this.voiceConnection.ssrc, 4);
         // 		this.sendPacket(blank);
 
-        let mut blank = vec![0u8; 74];
-        blank[0..2].copy_from_slice(&1u16.to_be_bytes());
-        blank[2..4].copy_from_slice(&70u16.to_be_bytes());
-        //TODO: blank[4..8].copy_from_slice(&voice_ssrc.to_be_bytes());
-        udp_socket.send(&blank).unwrap();
-
         let Some(audio_ssrc) = props.audio_ssrc else {
             return Err(gst::error_msg!(
                 gst::ResourceError::NotFound,
                 ["No audio SSRC provided"]
             ));
         };
+
+        let mut blank = vec![0u8; 74];
+        blank[0..2].copy_from_slice(&1u16.to_be_bytes());
+        blank[2..4].copy_from_slice(&70u16.to_be_bytes());
+        blank[4..8].copy_from_slice(&audio_ssrc.to_be_bytes());
+        udp_socket.send(&blank).unwrap();
 
         Ok(Self {
             crypto_state,
