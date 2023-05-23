@@ -86,6 +86,18 @@ impl State {
             ));
         };
 
+        //		const blank = Buffer.alloc(74);
+        // 		blank.writeUInt16BE(1, 0);
+        // 		blank.writeUInt16BE(70, 2);
+        // 		blank.writeUInt32BE(this.voiceConnection.ssrc, 4);
+        // 		this.sendPacket(blank);
+
+        let mut blank = vec![0u8; 74];
+        blank[0..2].copy_from_slice(&1u16.to_be_bytes());
+        blank[2..4].copy_from_slice(&70u16.to_be_bytes());
+        //TODO: blank[4..8].copy_from_slice(&voice_ssrc.to_be_bytes());
+        udp_socket.send(&blank).unwrap();
+
         let Some(audio_ssrc) = props.audio_ssrc else {
             return Err(gst::error_msg!(
                 gst::ResourceError::NotFound,
